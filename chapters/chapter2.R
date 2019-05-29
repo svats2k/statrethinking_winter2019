@@ -45,5 +45,6 @@ unstd.posterior <- likelihood * prior
 std.posterior <- unstd.posterior/ sum(unstd.posterior)
 
 # dislaying the posterior distribution
-
+par(mfrow=c(1,2))
 plot(p_grid, std.posterior)
+plot(p_grid, prior)
