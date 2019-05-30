@@ -1,0 +1,75 @@
+---
+title: "Chapter 4 Notes"
+output: html_document
+---
+
+```{r include=FALSE}
+
+library(rethinking)
+library(pracma)
+```
+
+## Simulating random walk on a soccer field
+
+```{r}
+pos <- replicate(1000, sum(runif(16,-1,1)))
+par(mfrow=c(1,2))
+simplehist(pos, xlab='Position')
+plot(density(pos))
+```
+# Modeling hieghts
+
+```{r}
+data("Howell1")
+d <- Howell1
+str(d)
+par(mfrow=c(1,2))
+simplehist(d$height)
+dens(d$height)
+
+
+# Prior distribution for mean of height
+par(mfrow=c(2,2))
+curve(dnorm(x,178,20), from = 100, to = 250, col='blue', xlab = 'mu', ylab = 'density')
+mtext('mu ~ dnorm(178,20')
+# Prior distribution for sigma of height
+curve(dunif(x, 0,50), from = -10, to = 60, col='blue', xlab = 'sigma', ylab = 'density')
+mtext('sigma ~ unif(0,50)')
+## Prior predictive simulations
+### Height distributions
+sample_mu <- rnorm(1e4, 178, 20)
+sample_signma <- runif(1e4, 0, 50)
+prior_h <- rnorm(1e4, sample_mu, sample_signma)
+dens(prior_h, xlab='height', ylab='Density')
+mtext('h ~ dnorm(mu, sigma)')
+### assuming a more liberal prior / flatter prior
+sample_mu <- rnorm(1e4, 178, 100)
+prior_h <- rnorm(1e4, sample_mu, sample_signma)
+dens(prior_h, xlab='height', ylab='Density', col='red')
+mtext('h ~ dnorm(mu, sigma)
+      mu ~ dnorm(178,100')
+```
+
+## Grid approximation for the posterior distribution
+The strategy is the same grid approximation strategy as before (page39). But now there are two dimensions, and so there is a geometric (literally) increase in bother. The algorithm is mercifully short,however,if not transparent. Think of the code as being six distinct commands. The first two lines of code just establish the range of µ and σ values, respectively, to calculate over, as well as how many points to calculate in-between. The third line of code expands those chosen µ and σ values into a matrix of all of the combinations of µ and σ. This matrix is stored in a dataframe, post. In the monstrous fourth line of code, shown in expanded form to make it easier to read, the log-likelihood at each combination of µ and σ is computed. This line looks so awful, because we havetobecarefulheretodoeverythingonthelogscale. Otherwiseroundingerrorwillquicklymakeallofthe posterior probabilities zero. So what sapply does is pass the unique combination of µ and σ on each row of posttoafunctionthatcomputesthelog-likelihood of each observed height, and adds all of these log-likelihoods together(sum). In the fifth line, we multiply the prior by the likelihood to get the product that is proportional totheposteriordensity. The priors ar ealso on the log scale,and so we add them to the log-likelihood, which is equivalent to multiplying the raw densities by the likelihood. Finally, the obstacle for getting back on the probability scale is that rounding error is always a threat when moving from log-probability to probability. If you use the obvious approach, like exp( post\$prod ), you will get a vector full of zeros, which is not very helpful. This is a result of R’s rounding very small probabilities to zero. Remember,inlargesamples,alluniquesamplesare unlikely. This is why you have to work with log-probability. The code in the box dodges this problem by scaling all of the log-products by the maximum log-product. As a result,the values in post$prob are not all zero,but they also aren’t exactly probabilities. Instead they are relative posterior probabilities. But that’s good enough for what we wish to do with these values. 
+```{r}
+N <- 200
+mu.list <- seq(from=140, to=160, length.out = N) # establish the range for mu
+sigma.list <- seq(from=4, to=9, length.out = N) # establish the range for sigma
+post <- expand.grid(mu=mu.list, sigma=sigma.list) # creating a matrix of all possible combinations of mu and sigma
+# computing log likelihood of each combinations of mu and sigma, converting to log, if not, rounding off error will take it to zero
+post$LL <- sapply(1:nrow(post), function(i) sum(dnorm(
+  d$height,
+  mean=post$mu[i],
+  sd=post$sigma[i],
+  log = TRUE )))
+post$prod <- post$LL + dnorm(post$mu, 178, 20, TRUE) + dunif(post$sigma, 0, 50, TRUE)
+post$prob <- exp(post$prod - max(post$prod))
+
+sample.rows <- sample(1:nrow(post), size=1e4, replace = TRUE, prob = post$prob)
+sample.mu <- post$mu[sample.rows]
+sample.sigma <- post$sigma[sample.rows]
+plot(sample.mu, sample.sigma, cex=0.5, pch=16, col=col.alpha(rangi2,0.1))
+```
+
+# Sampling from the distribution aboove
