@@ -2,3 +2,7 @@
 .Rhistory
 .ipynb_checkpoints
 .Rproj.user
+.Rproj
+chapters/*.Rproj
+chapters/.ipynb_checkpoints
+chapters/.ipynb_checkpoints/*
