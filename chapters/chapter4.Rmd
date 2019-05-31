@@ -72,4 +72,35 @@ sample.sigma <- post$sigma[sample.rows]
 plot(sample.mu, sample.sigma, cex=0.5, pch=16, col=col.alpha(rangi2,0.1))
 ```
 
-# Sampling from the distribution aboove
+# Modeling with QUAP
+
+```{r}
+d2 <- d[ d$age >= 18 , ]
+str(d2)
+#Defining the model using R's syntax
+flist <- alist(
+  height ~ dnorm(mu, sigma),
+  mu ~ dnorm(178, 20),
+  sigma ~ dunif(0,50)
+)
+
+m4.1 <- quap(flist, data = d2) # with random start point for hill climbing
+
+# start <- list(mu=mean(d2$height), sd = std(d2$height))
+# m4.1 <- quap(flist = flist, data = d2, start = start) # with random start point for hill climbing
+precis(m4.1)
+
+# Sampling from the quap model
+
+post <- extract.samples(m4.1, n=100)
+head(post)
+precis(post)
+
+vcov(m4.1)
+```
+
+# Building simple regression models
+
+```{r}
+plot(d$weight ~ d$height)
+```
