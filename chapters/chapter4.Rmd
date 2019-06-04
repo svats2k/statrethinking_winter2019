@@ -104,8 +104,10 @@ vcov(m4.1)
 ```{r}
 plot(d$weight ~ d$height)
 ```
-The strategy is to make the mean of the gaussian distribution into alinear function of the predictor variables and
+The strategy is to make the mean of the gaussian distribution into a linear function of the predictor variables and
 the other new paramters we want to invent.  Once you introduce predictor variables, the mean µ is no longer a parameter to be estimated. Rather,as seen in the second line of the model,µi is constructed from other parameters, α and β, and the observed variable x. This line is not a stochastic relationship—there is no ∼ in it, but rather an = in it — because the definition of µi is deterministic. That is to say that,once we know α and β and xi, we know µi with certainty.
+
+With linear model some of the parameters stand for the strength of the association between mean of the outcome and the value of the other variable.
 
 ## Modeling prior distribution
 ```{r}
@@ -134,7 +136,7 @@ b <- rlnorm(N, 0,1)
 plot( NULL , xlim=range(d2$weight) , ylim=c(-100,400) , xlab="weight" , ylab="height" )
 abline( h=0 , lty=2 )
 abline( h=272 , lty=1 , lwd=0.5 )
-mtext( "b ~ dnorm(0,10)" )
+mtext( "b ~ rlnorm(0,1)" )
 xbar <- mean(d2$weight)
 for ( i in 1:N )
   curve( a[i] + b[i]*(x - xbar) ,
@@ -162,4 +164,47 @@ m4.3 <- quap( alist( height ~ dnorm( mu , sigma ) ,
                      sigma ~ dunif( 0 , 50 ) ) ,
               data=d2 )
 precis(m4.3)
+```
+
+Keep in mind, the above mentioned approach does not guarantee that the relationship between the height and weight is linear.  However, the model approach approach we have chosen only fits lines.  Given that we have chosen lines, those with a slope of ~0.9 are the most plausible.
+
+# Posterior distribution
+
+Here we try to plot
+(a) raw data
+(b) extract samples from the posterior distribution
+(c) compute mean values for a and b
+(d) draw the implied line
+
+```{r}
+plot(height ~ weight, data = d2, col=rangi2)
+post <- extract.samples(m4.3)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+
+curve(a_map + b_map*(x-xbar), add=TRUE)
+
+
+```
+
+The posterior mean line is just the most plausible line in the infinite universe of lines available in the posterior distribution.  Every comibination of a and b is a line and has a posterior probability, given the posterior distribution. It could be that there are many lines with nearly the same posterior probability as the average line.
+
+Let us now try to build an interval.  let us take a single weight 50 Kgs and the come up with a list of 10,000 values of mu (height) that could have given us an individual who could weigh 50 Kgs.
+
+```{r}
+
+post <- extract.samples(m4.3)
+mu_at_50 <- post$a + post$b*(50 -xbar)
+
+dens(x = mu_at_50, col=rangi2, lwd=2)
+HPDI(mu_at_50,prob = 0.89)
+
+```
+HDPI essentially tells us that the central 89% of the ways for the model to produce the data place the average height between 159 and 160 cms.
+
+To apply the same logic to multiple data points we use the link function.  Here the link will take from the quap approximation, sample from the posterior distribution and then compute mu (height) for each case in the data and sample from the posterior distribution.  We then use this to plot the distribution of mu for each unique weight value on the horizontal axis.
+
+```{r}
+mu <- link(m4.3)
+str(mu)
 ```
