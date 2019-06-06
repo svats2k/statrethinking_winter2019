@@ -207,4 +207,61 @@ To apply the same logic to multiple data points we use the link function.  Here 
 ```{r}
 mu <- link(m4.3)
 str(mu)
+
+#mu[,1]
+
+```
+
+Each row in the output is a sample from the posterior distribution and each column is a row in the data set (352 rows).  THis matrix captures the most probable mu(height) for each row of the sample.
+
+Let us now try to visualize this.  Here we look at values of weight between 25 and 70, and visualize the mu(height) for each of the weights. We use the link function to capture the posterior distribution for each value of weight.
+
+```{r}
+weight.seq <- seq(from=25, to=70, by=1)
+
+mu <- link(m4.3, data = data.frame(weight=weight.seq))
+str(mu)
+
+plot(height ~ weight, d2, type='n')
+for (i in 1:100)
+  points(weight.seq, mu[i,], pch=16, col=col.alpha(rangi2,0.1))
+
+# Summarizing the distribution of mu
+mu.mean <- apply(mu, 2, mean)
+mu.HPDI <- apply(mu, 2, HPDI, prob=0.89)
+
+plot(height ~ weight, data = d2, col= col.alpha(rangi2,0.5))
+#Plotting the MAP lines, the mean mu for each weight
+lines(weight.seq, mu.mean)
+#plot shaded region for 89% HDPI
+shade(mu.HPDI, weight.seq)
+```
+
+In the picture above for each value of weight, a pile of computed mu values are shown.  As we can notice the amount of uncertainity depends on the value of weight.
+
+Receipe for for generating predictions and intervals from the posterior fit of a model.
+1. Use link to generate the posterior values for mu.
+2. Use summary function to identify the mean and HDPI bounds.
+3. use lines and shade to plot the lines.
+
+# Prediction Intervals
+We need to move beyond plotting just the mean of the posterior distribution values, but the height themselves. Here we use sim instead of link.  
+
+The approach is as follows: For every unique weight, we sample the correct mean mu from a gaussian distribution, using the correct sampled value of sigma from he posterior distribution.  If we do this for every sample from the posterior, we get a distribution of heights.  This collection of heights embody the undertainity of the posterior as well as the uncertainity in the gaussian distribution of heights.
+
+```{r}
+sim.height <- sim(m4.3, data = list(weight=weight.seq))
+str(sim.height)
+height.PI <- apply(sim.height, 2, PI, prob=0.89)
+
+# plot raw data 
+plot( height ~ weight , d2 , col=col.alpha(rangi2,0.5) )
+# draw MAP line 
+lines( weight.seq , mu.mean )
+# draw HPDI region for line 
+shade( mu.HPDI , weight.seq )
+# draw PI region for simulated heights 
+shade( height.PI , weight.seq )
+
+
 ```
