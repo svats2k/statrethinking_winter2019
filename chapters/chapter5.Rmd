@@ -1,0 +1,195 @@
+Statistical correlations are rather common in nature.  Most correlations do not indicate causal relationships.
+
+Simpson's paradox: The entire direction of an apparent association between the predictor and the outcome can be reversed by considering a confound.  A confound is a variable that may be corelated with another variable.
+
+Even when variables are completely uncorrelated, the importance of one may still depend on the other.  For instance, Sunlight and water may be completely independent of the plant growth; but in absence of one the other is useless.
+
+```{r include=FALSE}
+library(rethinking)
+```
+
+# Spurious Correlations
+
+## Marraige rate and divorce rates
+
+```{r}
+
+data(WaffleDivorce)
+d <- WaffleDivorce
+
+# Standardize Variables
+d$A <- scale(d$MedianAgeMarriage)
+d$D <- scale(d$Divorce)
+d$M <- scale(d$Marriage)
+
+m5.1 <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bA*A,
+    a ~ dnorm(0,0.1),
+    bA ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = d
+)
+```
+
+# prior predictive simulations
+```{r}
+set.seed(10)
+prior <- extract.prior( m5.1 )
+str(prior)
+mu <- link(m5.1, post=prior, data=list(A=c(-2,2)))
+plot(NULL, xlim=c(-2,2), ylim=c(-2,2), 
+     xlab='Median Age maraige(std)',
+     ylab='Divorce Rate (std)')
+for (i in 1:50)
+  lines(c(-2,2), mu[i,], col=col.alpha('black',0.4))
+```
+# Posterior simulations
+
+```{r}
+# Computing percentile interval of mean
+A_seq <- seq(from=-3, to=3.2, length.out = 30)
+mu <- link(m5.1, data=list(A=A_seq))
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI)
+
+str(mu.PI)
+mu.mean
+
+# Plotting them
+plot(D~A, data=d, col=rangi2)
+lines(A_seq, mu.mean, lwd=2)
+shade(mu.PI, A_seq)
+```
+
+The question that multiple rgression is trying to answer, "Is there any additonal value in knowing a variable, once I already know all of the other predictor variables?'.
+
+
+# Modeling divroce rate with marraige rate
+
+```{r}
+m5.2 <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bM*M,
+    a ~ dnorm(0,0.2),
+    bM ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data=d
+)
+
+precis(m5.2)
+```
+
+# Simple regression model
+```{r}
+lm5.1 <- lm(Divorce ~ A + D, d)
+summary(lm5.1)
+```
+
+# Building the Bayesian regression model
+```{r}
+m5.3 <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bM*M + bA*A,
+    a ~ dnorm(0,0.2),
+    bM ~ dnorm(0,05),
+    bA ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data=d
+)
+precis(m5.3)
+```
+
+## Plotting all 3 model coefficients together
+
+```{r}
+
+plot(coeftab(m5.1, m5.2, m5.3))
+
+```
+
+# Plotting multivariate posteriors
+
+## Predictor residual plots
+To begin with we model marrraige rate as function of Age
+```{r}
+m5.4 <- quap(
+  alist(
+    M ~ dnorm(mu, sigma),
+    mu <- a + bAM*A,
+    a ~ dnorm(0,0.2),
+    bAM ~ dnorm(0,0.5),
+    sigma ~ exp(1)
+  ), data = d
+)
+
+# Residual computation
+# Residuals are the variation in the marriage rate that is left over , after taking out the purely linear  relationship between the 2 variables
+
+mu <- link(m5.4)
+str(mu)
+mu_mean <- apply(mu$mu, 2, mean)
+mu_resid <- d$M - mu_mean
+
+#Now we need to plot the residual
+# plot raw data 
+plot( M ~ A , data = d , col=col.alpha(rangi2,0.8) )
+# draw MAP line
+mu_mean
+# draw HPDI region for line 
+#shade( mu.HPDI , weight.seq )
+# draw PI region for simulated heights 
+#shade( height.PI , weight.seq )
+
+```
+
+Regression models measure the remaining association of each predictor with the  outcome, after already knowing the other predictors. 
+
+## Counterfactual plots
+A sort of inferrential plot that displays the implied predictions of the model.  The simplest use of the counterfactual plots is to see how the predictions change as you change only one predictor at a time.  This means holding the values of all other variables constant, except the single predictor variable of interest.
+
+```{r}
+# prepare a counterfactual plot
+M_seq  <- seq(from=-2, to=3, length.out = 30)
+pred_data <- data.frame(M=M_seq, A=0)
+
+# Compute counterfactual mean divorce (mu)
+mu <- link(m5.3, data = pred_data)
+mu_mean <- link(mu, 2, mean)
+mu_PI <- link(mu, 2, PI)
+
+# Simulate counterfactual divorce rates
+D_sim <- sim(m5.3, data = pred_data, n=1e4)
+D_PI <- apply(D_sim, 2, PI)
+
+# display predictions, hiding raw data with type="n"
+plot( D ~ M , data=d , type="n" )
+mtext( "Median age marriage (std) = 0" )
+lines(M_seq, mu_mean)
+shade(mu_PI, M_seq)
+shade(D_PI, M_seq)
+```
+
+## Posterior prediction plots
+```{r}
+
+mu <- link(m5.3)
+str(mu)
+
+# sumarize the sample across the cases
+mu_mean <- apply(mu, 2, mean)
+mu_mean
+mu_PI <- apply(mu, 2, PI)
+mu_PI
+
+# Simulate new observations
+D_sim <- sim(m5.3, n=1e4)
+D_PI <- apply(D_sim, 2, PI)
+
+plot(mu_mean ~d$D, ylim=range(mu_PI), col=rangi2)
+abline(a=0, b=1, lty=2)
+for ( i in 1:nrow(d) ) lines( rep(d$D[i],2) , mu_PI[,i] , col=rangi2 )
+```
