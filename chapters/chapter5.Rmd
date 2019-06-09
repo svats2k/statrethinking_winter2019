@@ -136,10 +136,21 @@ mu_resid <- d$M - mu_mean
 
 #Now we need to plot the residual
 # plot raw data 
-plot( M ~ A , data = d , col=col.alpha(rangi2,0.8) )
-# draw MAP line
-mu_mean
-# draw HPDI region for line 
+par(mfrow=c(2,2))
+plot( M ~ A , data = d , 
+      xlab = 'Age at Marriage (std)',
+      ylab = 'Marriage rate(std)',
+      col=col.alpha(rangi2,0.8))
+lines(d$A, mu_mean)
+segments(d$A, mu_mean, d$A, d$M)
+
+plot(NULL,x = seq(from=-1,to=1,length.out=100), y=seq(from=-2,to=2, length.out=100))
+
+plot(mu_resid, d$D, col='blue',
+     ylab='Divorce rate (std)',
+     xlab='Marriage rate residuals')
+abline(v=0, lty=2)
+abline(lm(d$D~mu_resid))
 #shade( mu.HPDI , weight.seq )
 # draw PI region for simulated heights 
 #shade( height.PI , weight.seq )
