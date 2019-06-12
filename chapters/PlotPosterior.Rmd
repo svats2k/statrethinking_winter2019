@@ -243,12 +243,6 @@ mu_M_A_mean <- apply(mu_M_A, 2, mean)
 mu_M_A_resid <- d$M - mu_M_A_mean
 d$mu_M_A_resid <- mu_M_A_resid
 
-plot(M ~ A, data = d, col=rangi2,
-     xlab = 'Median Age at Marraige(std)',
-     ylab = 'Marraige rate (std)')
-lines(d$A, mu_M_A_mean)
-segments(d$A, mu_M_A_mean, d$A, d$M)
-
 # Building a residual plot
 mAResDiv <- quap(
   alist(
@@ -263,6 +257,16 @@ res_seq <- seq(-2,2, length.out=100)
 mu_R <- link(mAResDiv, data = data.frame(mu_M_A_resid=res_seq))
 mu_R_mean <- apply(mu_R, 2, mean)
 mu_R_PI <- apply(mu_R, 2, PI)
+
+par(mfrow=c(1,2))
+
+plot(M ~ A, data = d, col=rangi2,
+     xlab = 'Median Age at Marraige(std)',
+     ylab = 'Marraige rate (std)')
+lines(d$A, mu_M_A_mean)
+segments(d$A, mu_M_A_mean, d$A, d$M)
+
+
 plot(d$D ~ mu_M_A_resid, col= rangi2,
      xlab = 'Marraige rate residuals',
      ylab = 'Divorce rate(std)')
