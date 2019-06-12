@@ -160,9 +160,12 @@ dWD$M <- scale(dWD$Marriage)
 ```
 
 ## Model Building
+Here we are trying to model the total association between age of marriage and divorce rate.  It could so happen that
+divorce rate is imapct directly by age and through a *mediation* path with marriage rate.
+
 ```{r}
 
-mD <- quap(
+mA <- quap(
   alist(
     D ~ dnorm(mu, sigma),
     mu <- a + bA*A,
@@ -172,7 +175,33 @@ mD <- quap(
   ), data = dWD
 )
 
-precis(mD)
+mM <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bM*M,
+    a ~ dnorm(0,0.2),
+    bM ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = dWD
+)
+
+mAM <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bA*A + bM*M,
+    a <- dnorm(0,0.2),
+    bA <- dnorm(0,0.5),
+    bM <- dnorm(0,0.5),
+    sigma <- dexp(1)
+  ), data = dWD
+)
+
+# plot(coeftab(mA, mM, mAM))
+
+precis(mA)
+precis(mM)
+precis(mAM)
+
 ```
 
 ## Simulating the prior distribution
@@ -189,33 +218,78 @@ for (i in 1:50)
 
 ```
 
-## A Counterfactual plot for multivariate regression
+## Posterior Residual Plots
+
+A predictor variable residual is the average perdiction error when we use all of the other predictor variables to model a predictor of interest.
+
+### Residual plot for Marraige Rate
+Here we need to build a model, which is the regression between divorce rate and Median age (mA)
 
 ```{r}
 
-# Model built
-mCF <- quap(
+mAr <- quap(
+  alist(
+    M ~ dnorm(mu, sigma),
+    mu <- a + bMA * A,
+    bMA ~ dnorm(0,0.5),
+    a ~ dnorm(0,0.2),
+    sigma ~ dexp(1)
+  ), data = d
+)
+
+mu_M_A <- link(mAr)
+#Average of the Divorce rate means caused by the median age in the 50 states are as follows:
+mu_M_A_mean <- apply(mu_M_A, 2, mean)
+mu_M_A_resid <- d$M - mu_M_A_mean
+d$mu_M_A_resid <- mu_M_A_resid
+
+plot(M ~ A, data = d, col=rangi2,
+     xlab = 'Median Age at Marraige(std)',
+     ylab = 'Marraige rate (std)')
+lines(d$A, mu_M_A_mean)
+segments(d$A, mu_M_A_mean, d$A, d$M)
+
+# Building a residual plot
+mAResDiv <- quap(
   alist(
     D ~ dnorm(mu, sigma),
-    mu <- a + bA*A + bM*M,
-    a <- dnorm(0,0.2),
-    bA <- dnorm(0,0.5),
-    bM <- dnorm(0,0.5),
-    sigma <- dexp(1)
-  ), data = dWD
+    mu <- a + bR*mu_M_A_resid,
+    a ~ dnorm(0,0.2),
+    bR ~dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = d
 )
+res_seq <- seq(-2,2, length.out=100)
+mu_R <- link(mAResDiv, data = data.frame(mu_M_A_resid=res_seq))
+mu_R_mean <- apply(mu_R, 2, mean)
+mu_R_PI <- apply(mu_R, 2, PI)
+plot(d$D ~ mu_M_A_resid, col= rangi2,
+     xlab = 'Marraige rate residuals',
+     ylab = 'Divorce rate(std)')
+abline(v=0, lty=2)
+lines(res_seq, mu_R_mean)
+shade(mu_R_PI,res_seq )
+
+```
+
+
+
+
+## A Counterfactual plot for multivariate regression
+
+```{r}
 
 # Studying counterfactual for average age and Marraige rate between -2 and 2 
 M_seq <- seq(from=-2, to=3, length.out = 100)
 pred_data <- data.frame(M=M_seq, A=0)
 
 #Computre counterfactual mean divorce rate
-mu_M <- link(mCF, data = pred_data)
+mu_M <- link(mAM, data = pred_data)
 mu_mean_M <- apply(mu_M, 2, mean)
 mu_PI_M <- apply(mu_M, 2, PI)
 
 # Simulate counterfactual divorce rates
-D_sim_M <- sim(mCF, data=pred_data, n=1e4)
+D_sim_M <- sim(mAM, data=pred_data, n=1e4)
 D_PI_M <- apply(D_sim_M, 2, PI)
 
 # Studying counterfactual for average age and Median Age between -2 and 2 
@@ -223,12 +297,12 @@ A_seq <- seq(from=-2, to=3, length.out = 100)
 pred_data <- data.frame(M=0, A=A_seq)
 
 #Computre counterfactual mean divorce rate
-mu_A <- link(mCF, data = pred_data)
+mu_A <- link(mAM, data = pred_data)
 mu_mean_A <- apply(mu_A, 2, mean)
 mu_PI_A <- apply(mu_A, 2, PI)
 
 # Simulate counterfactual divorce rates
-D_sim_A <- sim(mCF, data=pred_data, n=1e4)
+D_sim_A <- sim(mAM, data=pred_data, n=1e4)
 D_PI_A <- apply(D_sim_A, 2, PI)
 
 par(mfrow=c(1,2))
