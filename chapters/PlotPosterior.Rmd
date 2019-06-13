@@ -206,9 +206,9 @@ precis(mAM)
 
 ## Simulating the prior distribution
 ```{r}
-prior <- extract.prior(mD)
+prior <- extract.prior(mA)
 A_seq <- seq(-2, 2, length.out = 100)
-mu <- link(mD, post=prior, data=data.frame(A=A_seq))
+mu <- link(mA, post=prior, data=data.frame(A=A_seq))
 str(mu)
 plot(NULL, xlim=range(A_seq), ylim=c(-2,2),
      xlab='Median Marriage Age(std)',
@@ -234,14 +234,14 @@ mAr <- quap(
     bMA ~ dnorm(0,0.5),
     a ~ dnorm(0,0.2),
     sigma ~ dexp(1)
-  ), data = d
+  ), data = dWD
 )
 
 mu_M_A <- link(mAr)
 #Average of the Divorce rate means caused by the median age in the 50 states are as follows:
 mu_M_A_mean <- apply(mu_M_A, 2, mean)
-mu_M_A_resid <- d$M - mu_M_A_mean
-d$mu_M_A_resid <- mu_M_A_resid
+mu_M_A_resid <- dWD$M - mu_M_A_mean
+dWD$mu_M_A_resid <- mu_M_A_resid
 
 # Building a residual plot
 mAResDiv <- quap(
@@ -251,33 +251,81 @@ mAResDiv <- quap(
     a ~ dnorm(0,0.2),
     bR ~dnorm(0,0.5),
     sigma ~ dexp(1)
-  ), data = d
+  ), data = dWD
 )
-res_seq <- seq(-2,2, length.out=100)
-mu_R <- link(mAResDiv, data = data.frame(mu_M_A_resid=res_seq))
-mu_R_mean <- apply(mu_R, 2, mean)
-mu_R_PI <- apply(mu_R, 2, PI)
+res_seq_MA <- seq(-2,2, length.out=100)
+mu_RMA <- link(mAResDiv, data = data.frame(mu_M_A_resid=res_seq_MA))
+mu_RMA_mean <- apply(mu_RMA, 2, mean)
+mu_RMA_PI <- apply(mu_RMA, 2, PI)
+
 
 par(mfrow=c(1,2))
 
-plot(M ~ A, data = d, col=rangi2,
+plot(M ~ A, data = dWD, col=rangi2,
      xlab = 'Median Age at Marraige(std)',
      ylab = 'Marraige rate (std)')
-lines(d$A, mu_M_A_mean)
-segments(d$A, mu_M_A_mean, d$A, d$M)
+lines(dWD$A, mu_M_A_mean)
+segments(dWD$A, mu_M_A_mean, dWD$A, dWD$M)
 
-
-plot(d$D ~ mu_M_A_resid, col= rangi2,
-     xlab = 'Marraige rate residuals',
+plot(dWD$D ~ mu_M_A_resid, col= rangi2,
+     xlab = 'M ~ A residuals',
      ylab = 'Divorce rate(std)')
 abline(v=0, lty=2)
-lines(res_seq, mu_R_mean)
-shade(mu_R_PI,res_seq )
+lines(res_seq_MA, mu_RMA_mean)
+shade(mu_RMA_PI,res_seq_AM )
 
 ```
 
+```{r}
+mMr <- quap(
+  alist(
+    A ~ dnorm(mu, sigma),
+    mu <- a + bAM * M,
+    bAM ~ dnorm(0,0.5),
+    a ~ dnorm(0,0.2),
+    sigma ~ dexp(1)
+  ), data = dWD
+)
 
+mu_A_M <- link(mMr)
+#Average of the Divorce rate means caused by the median age in the 50 states are as follows:
+mu_A_M_mean <- apply(mu_A_M, 2, mean)
+mu_A_M_resid <- dWD$A - mu_A_M_mean
+dWD$mu_A_M_resid <- mu_A_M_resid
 
+# Building a residual plot
+mMAResDiv <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bR*mu_A_M_resid,
+    a ~ dnorm(0,0.2),
+    bR ~dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = dWD
+)
+res_seq_AM <- seq(-2,2, length.out=100)
+mu_RAM <- link(mMAResDiv, data = data.frame(mu_A_M_resid=res_seq_AM))
+mu_RAM_mean <- apply(mu_RAM, 2, mean)
+mu_RAM_PI <- apply(mu_RAM, 2, PI)
+
+par(mfrow=c(1,2))
+
+plot(A ~ M, data = dWD, col=rangi2,
+     xlab = 'Marraige rate (std)',
+     ylab = 'Median Age at Marraige(std)')
+lines(dWD$M, mu_A_M_mean)
+segments(dWD$M, mu_A_M_mean, dWD$M, dWD$A)
+
+plot(dWD$D ~ mu_A_M_resid, col= rangi2,
+     xlab = 'A ~ M residuals',
+     ylab = 'Divorce rate(std)')
+abline(v=0, lty=2)
+lines(res_seq_AM, mu_RAM_mean)
+shade(mu_RAM_PI,res_seq_AM )
+
+```
+
+The key take-away in the above mentioned plots is that regression models measure the remaining association with the outcome after already knowing all the other predictors.
 
 ## A Counterfactual plot for multivariate regression
 
@@ -329,3 +377,30 @@ shade(D_PI_A, M_seq)
 
 ```
 
+## Posterior Prediction Plots
+
+```{r}
+# predicting simulation averaging over the posterior
+mu <- link(mAM)
+
+# simulate samples across cases
+mu_mean <- apply(mu, 2, mean)
+mu_PI <- apply(mu, 2, PI)
+
+# simulate observations
+D_sim <- sim(mAM, n=1e3)
+D_PI <- apply(D_sim, 2, mean)
+
+plot(mu_mean ~ dWD$D, col=rangi2,
+     xlab='Observed Divorce',
+     ylab='Predicted Divorce')
+
+abline(a=0, b=1, lty=2)
+
+
+for (i in 1:nrow(dWD))
+  lines(rep(dWD$D[i],2), mu_PI[,i], col=rangi2)
+
+```
+
+The model seems to overpredict for states with low divorce rates and underpredict for those with high divorce rates. This is expected to happen as regression model is skeptical of extreme values and regresses towards the mean.
