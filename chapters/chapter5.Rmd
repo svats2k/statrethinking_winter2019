@@ -180,34 +180,32 @@ mu_PI <- link(mu, 2, PI)
 # Simulate counterfactual divorce rates
 D_sim <- sim(m5.3, data = pred_data, n=1e4)
 D_PI <- apply(D_sim, 2, PI)
-
-# display predictions, hiding raw data with type="n"
-plot( D ~ M , data=d , type="n" )
-mtext( "Median age marriage (std) = 0" )
-lines(M_seq, mu_mean)
-shade(mu_PI, M_seq)
-shade(D_PI, M_seq)
+# 
+# # display predictions, hiding raw data with type="n"
+# plot( D ~ M , data=d , type="n" )
+# mtext( "Median age marriage (std) = 0" )
+# lines(M_seq, mu_mean)
+# shade(mu_PI, M_seq)
+# shade(D_PI, M_seq)
 ```
 
 ## Posterior prediction plots
 ```{r}
 
 mu <- link(m5.3)
-str(mu)
 
 # sumarize the sample across the cases
 mu_mean <- apply(mu, 2, mean)
-mu_mean
 mu_PI <- apply(mu, 2, PI)
-mu_PI
 
 # Simulate new observations
 D_sim <- sim(m5.3, n=1e4)
 D_PI <- apply(D_sim, 2, PI)
 
-plot(mu_mean ~d$D, ylim=range(mu_PI), col=rangi2)
-abline(a=0, b=1, lty=2)
-for ( i in 1:nrow(d) ) lines( rep(d$D[i],2) , mu_PI[,i] , col=rangi2 )
+# plot(mu_mean ~d$D, ylim=range(mu_PI), col=rangi2)
+# abline(a=0, b=1, lty=2)
+# for ( i in 1:nrow(d) ) lines( rep(d$D[i],2) , mu_PI[,i] , col=rangi2 )
+
 ```
 
 # Handling Categorical variables
@@ -260,5 +258,73 @@ precis(mIndx, depth=2)
 post <- extract.samples(mIndx)
 post$diff_fm <- post$a[,1] - post$a[,2]
 precis(post, depth=2)
+
+```
+
+### Using primate milk dataset
+```{r}
+data("milk")
+d <- milk
+d$K <- scale(d$kcal.per.g)
+d$N <- scale(d$neocortex.perc)
+d$M <- scale(d$mass)
+
+d$clade_id <- as.integer(d$clade)
+
+mMLK <- quap(
+  alist(
+    K ~ dnorm(mu, sigma),
+    mu <- a[clade_id],
+    a[clade_id] ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = d
+)
+
+labels <- paste( "a[" , 1:4 , "]:" , levels(d$clade) , sep="" )
+precis( mMLK , depth=2 , pars="a" )
+# plot(  , labels=labels , xlab="expected kcal (std)" )
+
+```
+
+# Masjed Retionships
+```{r}
+data("milk")
+d <- milk
+d$K <- scale(d$kcal.per.g)
+d$N <- scale(d$neocortex.perc)
+d$M <- scale(d$mass)
+
+unique(d$neocortex.perc)
+
+# dropping the rows with NA values
+dcc <- d[complete.cases(d$K, d$N, d$M),]
+
+
+mMA <- quap(
+  alist(
+    K ~ dnorm(mu, sigma),
+    mu <- a + bN*N,
+    a ~ dnorm(0,0.2),
+    bN ~ dnorm(0,0.5),
+    sigma ~ dexp(1)
+  ), data = dcc
+)
+precis(mMA)
+
+```
+
+
+## Looking at the prior distributions
+
+```{r}
+prior <- extract.prior(mMA)
+
+Xseq <- c(-2,2)
+mu <- link(mMA, post=prior, data=list(N=Xseq))
+
+plot(NULL, xlim=Xseq, ylim=Xseq)
+
+for (i in 1:50)
+  lines(Xseq, mu[i,], col=rangi2)
 
 ```
